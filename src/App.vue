@@ -9,8 +9,15 @@
       <template #right>
         <span class="p-input-icon-left">
           <i class="pi pi-search"/>
-          <InputText v-model="filters['global']" placeholder="Search..."/>
+          <InputText v-model="qFilter"
+                     @input="setQFilter"
+                     @keyup.enter="sendRequest"
+                     @blur="sendQRequest" placeholder="Search..."/>
         </span>
+        <Dropdown id="searchIn" v-model="searchOption" :options="searchOptions"
+                  optionLabel="searchOption" optionValue="value"
+                  placeholder="Search by">
+        </Dropdown>
       </template>
     </Toolbar>
 
@@ -20,14 +27,18 @@
         <div class="p-d-flex" style="height: 18rem;">
           <Card class="p-col-2">
             <template #header>
-              <img src="https://images-na.ssl-images-amazon.com/images/I/814YmHvcy3L.jpg" style="height: 12rem;"/>
+              <img
+                  src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSrKYr979Ad5PogdhhEIUfWmT1fx-rjJxsdEETbqPnUJb8_Yk38f4WDqzLd2H8beWst2p86dBKh&usqp=CAc"
+                  style="height: 12rem;"/>
             </template>
 
             <template #title>
               <div class="p-d-inline text">
-                <Rating v-model="book.stars" :stars="5" :cancel="false"></Rating>
-                <font-awesome-icon color="#2196F3" icon="thumbs-up" class="p-mr-2"/>
-                <font-awesome-icon icon="thumbs-down"/>
+                <Rating @change="setStars(book)" v-model="book.stars" :stars="5" :cancel="false"></Rating>
+                <i @click.stop="likeBook(book)" class="pi pi-thumbs-up p-mr-2 rate-button"
+                   :class="{'rate': book.rate === 'like'}"></i>
+                <i @click.stop="dislikeBook(book)" class="pi pi-thumbs-down rate-button"
+                   :class="{'rate': book.rate === 'dislike'}"></i>
               </div>
             </template>
           </Card>
@@ -46,7 +57,7 @@
             </template>
 
           </Card>
-          <Card style="height: 18rem;">
+          <Card class="p-col-2" style="height: 18rem;">
 
             <template #subtitle>
               <div style="height: 10rem">
@@ -182,15 +193,95 @@ export default {
       text: null,
       deleteBookDialog: false, //used for delete pop-up
       submitted: false,
-      categories: null,
-
+      categories: [],
 
       updateDialog: false,
       createDialog: false,
-      filters: {}
+      filters: {},
+
+      searchOption: null,
+      searchOptions: [
+        {
+          searchOption: 'Title',
+          value: 'title'
+        },
+        {
+          searchOption: 'Author',
+          value: 'author'
+        }
+      ],
+      qFilter: null,
     }
   },
   methods: {
+    /**
+     * Search
+     */
+    setQFilter() {
+    },
+    sendRequest() {
+      this.$store.dispatch('searchBooks');
+    },
+    sendQRequest() {
+      console.log('request sent on blur' + this.qFilter);
+    },
+
+
+    /**
+     * Rating
+     */
+    setStars(book) {
+      let payload = {
+        _id: book._id,
+        bookObject: {
+          stars: book.stars
+        }
+      }
+
+      this.$store.dispatch('updateBook', payload).then(() => {
+        this.$store.dispatch('loadBooks');
+      });
+    },
+    dislikeBook(book) {
+      let payload = {
+        _id: book._id,
+        bookObject: {}
+      }
+      if (book.rate === 'neutral' || book.rate === 'like') {
+        payload.bookObject = {
+          rate: 'dislike'
+        }
+
+      } else if (book.rate === 'dislike') {
+        payload.bookObject = {
+          rate: 'neutral'
+        }
+      }
+
+      this.$store.dispatch('updateBook', payload).then(() => {
+        this.$store.dispatch('loadBooks');
+      });
+    },
+    likeBook(book) {
+      let payload = {
+        _id: book._id,
+        bookObject: {}
+      }
+      if (book.rate === 'neutral' || book.rate === 'dislike') {
+        payload.bookObject = {
+          rate: 'like'
+        }
+
+      } else if (book.rate === 'like') {
+        payload.bookObject = {
+          rate: 'neutral'
+        }
+      }
+
+      this.$store.dispatch('updateBook', payload).then(() => {
+        this.$store.dispatch('loadBooks');
+      });
+    },
 
     /**
      ****************** CRUD **********************
@@ -201,9 +292,7 @@ export default {
      */
 
     createBook() {
-
       const newBook = this.deleteEmptyProperties(this.tBook);
-
       if (newBook && Object.keys(newBook).length === 0 && newBook.constructor === Object) {
         this.$toast.add({severity: 'warn', summary: 'Empty', detail: 'Complete book data', life: 3000});
       } else {
@@ -249,16 +338,18 @@ export default {
 
 
     openCreateBookForm() {
-      this.buildCategories();
 
 
-      this.createDialog = true;
       this.tBook = {
         title: null,
         author: null,
         description: null,
         category: null,
       }
+      this.categories = this.buildCategories();
+
+      this.createDialog = true;
+
     },
     //makes two copies of selected book and show update dialog
     prepareBookToUpdate(book) {
@@ -278,11 +369,11 @@ export default {
         title: this.compareValues(this.tBook.title, this.bookCopy.title),
         author: this.compareValues(this.tBook.author, this.bookCopy.author),
         description: this.compareValues(this.tBook.description, this.bookCopy.description),
-        category: this.compareValues(this.tBook.category, this.bookCopy.category)
+        category: this.compareValues(this.tBook.category, this.bookCopy.category),
+        rate: this.compareValues(this.tBook.rate, this.bookCopy.rate),
+        stars: this.compareValues(this.tBook.stars, this.bookCopy.stars),
       }
 
-
-      console.log('before delete', updatedBook);
       //delete empty properties
       let bookObject = this.deleteEmptyProperties(updatedBook);
 
@@ -317,17 +408,20 @@ export default {
       let buffer = [];
       let categories = [];
       let category = null;
-      for (let i = 0; i <= this.books.length - 1; i++) {
-        category = this.books[i].category.toLowerCase();
+
+      this.books.forEach((book) => {
+        category = book.category.toLowerCase();
         if (!buffer.includes(category)) {
           buffer.push(category);
 
           categories.push({
-            category: buffer[i],
-            value: buffer[i]
+            category: category,
+            value: category
           });
+
+
         }
-      }
+      });
       return categories;
     },
     compareValues(first, second) {
@@ -357,9 +451,6 @@ export default {
   },
   components: {
     Toolbar,
-    /*  DataTable,
-      Column,
-      Rating*/
     Card,
     Rating,
     Button,
@@ -385,6 +476,17 @@ export default {
   width: 125px;
   margin: 0 auto 2rem auto;
   display: block;
+}
+
+
+.rate {
+  color: #2196F3;
+}
+
+.rate-button:hover {
+  color: #FFE082;
+  cursor: pointer;
+  font-size: 22px;
 }
 
 .confirmation-content {

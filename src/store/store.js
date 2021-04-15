@@ -24,19 +24,26 @@ export default createStore({
          * Load books
          * @param commit
          */
+        // eslint-disable-next-line no-empty-pattern
         loadBooks({commit}) {
-            let books = [];
-            axios.get('/books', {}).then(res => {
-                books = res.data;
-                commit('setBooks', books);
+            axios.get('/books').then(res => {
+                if (res.data) {
+                    const books = res.data;
+                    commit('setBooks', books);
+                }
             });
         },
 
+        // eslint-disable-next-line no-empty-pattern
+        preLoadBooks({}) {
+            return axios.get('/books');
+        },
         /**
          * Add book
          * @param payload
          * @returns {Promise<AxiosResponse<any>>}
          */
+        // eslint-disable-next-line no-empty-pattern
         addBook({}, payload) {
             return axios.post('/books', payload);
         },
@@ -46,6 +53,7 @@ export default createStore({
          * @param payload
          * @returns {Promise<AxiosResponse<any>>}
          */
+        // eslint-disable-next-line no-empty-pattern
         updateBook({}, payload) {
             return axios.patch('/books/' + payload._id, payload.bookObject);
         },
@@ -55,13 +63,14 @@ export default createStore({
          * @param id
          * @returns {Promise<AxiosResponse<any>>}
          */
+        // eslint-disable-next-line no-empty-pattern
         deleteBook({}, id) {
             return axios.delete('/books/' + id);
         }
 
     },
     mounted() {
-      this.$store.dispatch('loadBooks');
+        this.$store.dispatch('loadBooks');
     },
     modules: {
         updateDialog
